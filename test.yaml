@@ -1,0 +1,50 @@
+---
+#  Why cannot the template module access the template file?
+- name: Is this a bug?
+  hosts: localhost  # On a remote host this has the same behaviour.
+  connection: local
+  become: true
+  tasks:
+    - name: debug whoami  # running as root
+      local_action: "shell whoami"
+
+    - name: create tmp dir
+      local_action:
+        module: tempfile
+        state: directory
+      register: test_dir
+
+    - name: show tmp dir path
+      debug:
+        msg: "{{ test_dir.path }}"
+
+    - name: create file
+      local_action: "shell touch {{ test_dir.path }}/tmp.0"
+
+    - name: copy template file
+      local_action:
+        module: copy
+        src: "test.j2"
+        dest: "{{ test_dir.path }}/"
+
+    - name: list tmp dir  # all the files are owned by root
+      local_action: "shell ls -l {{ test_dir.path }}"
+
+    - name: render templates  # cannot access test.j2
+      local_action:
+        module: template
+        src: "{{ test_dir.path }}/test.j2"
+        dest: "{{ test_dir.path }}/test.txt"
+      ignore_errors: true
+
+    - name: chmod tmp dir  # readable to all
+      local_action: "shell chmod -R a+rX {{ test_dir.path }}"
+
+    - name: list tmp dir
+      local_action: "shell ls -l {{ test_dir.path }}"
+
+    - name: render templates  # now it suceeds
+      local_action:
+        module: template
+        src: "{{ test_dir.path }}/test.j2"
+        dest: "{{ test_dir.path }}/test.txt"
